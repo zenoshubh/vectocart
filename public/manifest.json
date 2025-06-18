@@ -8,7 +8,8 @@
     "activeTab",
     "scripting",
     "contextMenus",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.amazon.com/*",
@@ -19,14 +20,10 @@
     "https://*.meesho.com/*"
   ],
   "action": {
-    "default_popup": "src/sidebar/index.html",
-    "default_title": "VectoCart",
-    "default_icon": {
-      "16": "vite.svg",
-      "32": "vite.svg",
-      "48": "vite.svg",
-      "128": "vite.svg"
-    }
+    "default_title": "Open VectoCart Sidebar"
+  },
+  "side_panel": {
+    "default_path": "src/sidebar/index.html"
   },
   "background": {
     "service_worker": "background.js",
