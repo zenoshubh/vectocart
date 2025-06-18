@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "VectoCart - Collaborative Shopping",
+  "description": "Share and collaborate on shopping carts across multiple e-commerce sites",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.amazon.com/*",
+    "https://*.amazon.in/*",
+    "https://*.flipkart.com/*",
+    "https://*.myntra.com/*",
+    "https://*.ajio.com/*",
+    "https://*.meesho.com/*"
+  ],
+  "action": {
+    "default_popup": "src/sidebar/index.html",
+    "default_title": "VectoCart",
+    "default_icon": {
+      "16": "vite.svg",
+      "32": "vite.svg",
+      "48": "vite.svg",
+      "128": "vite.svg"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.amazon.com/*",
+        "https://*.amazon.in/*",
+        "https://*.flipkart.com/*",
+        "https://*.myntra.com/*",
+        "https://*.ajio.com/*",
+        "https://*.meesho.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["vite.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "vite.svg",
+    "32": "vite.svg",
+    "48": "vite.svg",
+    "128": "vite.svg"
+  }
+}
