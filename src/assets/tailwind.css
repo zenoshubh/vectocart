@@ -118,3 +118,50 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Branded, accessible scrollbars (global) */
+@layer base {
+  :root {
+    /* Track/thumb colors aligned with AGENTS.md */
+    --scrollbar-track: #F8F9FA;         /* surface-2 */
+    --scrollbar-thumb: #E40046;         /* primary */
+    --scrollbar-thumb-hover: #CC003F;   /* primary-600 */
+    --scrollbar-thumb-active: #B00037;  /* primary-700 */
+  }
+  .dark {
+    /* Subtle darker track on dark */
+    --scrollbar-track: color-mix(in oklab, white 8%, black);
+    --scrollbar-thumb: #E40046; /* keep brand */
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  /* Reserve space for scrollbars to make them more visible */
+  html, body, #root {
+    scrollbar-gutter: stable both-edges;
+  }
+
+  /* WebKit (Chrome, Edge, Safari, Opera) */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 2px solid var(--scrollbar-track);
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+  *:active::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-active);
+  }
+}
