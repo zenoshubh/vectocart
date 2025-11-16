@@ -9,7 +9,7 @@ VectoCart is a cross‑browser, MV3 WebExtensions project built with WXT and Typ
 - Messaging: chrome.runtime message ports with zod schemas
 - Storage:
   - In‑extension: chrome.storage.local/session and IndexedDB (idb)
-  - Backend: Firebase (Firestore, Auth, Functions), via HTTPS callable/REST where appropriate
+- Backend: Firebase (Firestore, Auth), using client SDK only (no Cloud Functions)
 
 ## Design System
 - Colors (from the provided UI reference):
@@ -59,48 +59,51 @@ theme: {
 ```
 
 ## Project Layout (WXT)
-WXT follows a strict, flat project structure. Key directories at the project root:
+This project is configured to use a dedicated `src/` directory via WXT (`srcDir: 'src'` in `wxt.config.ts`). WXT keeps a flat structure inside `src/`.
+
+Key directories at the project root:
 - `.output/`               // build artifacts
 - `.wxt/`                  // generated WXT TS config
-- `assets/`                // CSS, images, assets processed by WXT
-- `components/`            // auto‑imported UI components
-- `entrypoints/`           // background/content/sidepanel/options entry files
-- `hooks/`                 // auto‑imported React/Solid hooks
-- `modules/`               // local WXT modules
 - `public/`                // copied as‑is
-- `utils/`                 // auto‑imported utilities
-- `.env`, `.env.publish`   // environment variables
-- `app.config.ts`          // runtime config
 - `wxt.config.ts`          // main WXT config (typed)
-- `web-ext.config.ts`      // browser startup config
+- `web-ext.config.ts`      // browser startup config (optional)
 - `tsconfig.json`          // TypeScript config
 - `package.json`
 
-If you prefer a `src/` directory, enable it in `wxt.config.ts`:
+Key directories under `src/`:
+- `assets/`                // CSS, images, assets processed by WXT
+- `components/`            // auto‑imported UI components (e.g., shadcn/ui)
+- `entrypoints/`           // background/content/sidepanel/options entry files
+- `hooks/`                 // auto‑imported React hooks
+- `services/`              // client service layer (e.g., Firebase adapters)
+- `services/firebase/`     // Firebase client SDK wrappers
+- `services/firebase/app.ts`         // initialize app (reads env)
+- `services/firebase/auth.ts`        // auth helpers
+- `services/firebase/firestore.ts`   // rooms/products/votes adapters
+<!-- no Cloud Functions on free tier -->
+- `lib/`                   // utilities like `cn`, helpers
+- `modules/`               // local WXT modules (optional)
+- `types/`                 // ambient/type declarations
+- `utils/`                 // auto‑imported utilities (if you prefer splitting from lib)
+- `app.config.ts`          // runtime config (optional)
+
+Our `wxt.config.ts` sets `srcDir` explicitly:
 
 ```ts
+import { defineConfig } from "wxt";
+
 export default defineConfig({
-  srcDir: 'src',
+  srcDir: "src",
+  modules: ["@wxt-dev/module-react"],
 });
 ```
 
-With `srcDir`, WXT expects these under `src/`:
-- `assets/`, `components/`, `entrypoints/`, `hooks/`, `utils/`, plus `app.config.ts`
-
-You can customize directories in `wxt.config.ts`:
-
-```ts
-export default defineConfig({
-  // Relative to project root
-  srcDir: 'src',             // default: '.'
-  modulesDir: 'wxt-modules', // default: 'modules'
-  outDir: 'dist',            // default: '.output'
-  publicDir: 'static',       // default: 'public'
-
-  // Relative to srcDir
-  entrypointsDir: 'entries', // default: 'entrypoints'
-});
-```
+### Firebase Placement & Usage
+- All Firebase client code lives under `src/services/firebase/*` as a thin, typed service layer.
+- Background (service worker) performs Firebase calls; UI/content communicate via messaging.
+- Keep runtime‑safe config in `src/config/firebase.ts` and read keys from `.env` / `.env.publish`.
+- We do not use Cloud Functions on the free tier; any server‑like logic must be done client‑side with Firestore rules enforcing security.
+- Return `{ data, error }` from service functions; validate external data with zod at boundaries.
 
 ## Core Principles
 1. Type Safety First
