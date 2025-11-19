@@ -1,0 +1,143 @@
+import type { User } from '@supabase/supabase-js';
+import { getSupabase } from './client';
+import { browser } from 'wxt/browser';
+
+export interface ServiceResult<T> {
+  data: T | null;
+  error: Error | null;
+}
+
+export function onAuthStateChanged(callback: (user: User | null) => void): () => void {
+  const supabase = getSupabase();
+  const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user ?? null);
+  });
+  return () => {
+    subscription.subscription.unsubscribe();
+  };
+}
+
+export async function signInWithGoogleViaIdentityFlow(): Promise<ServiceResult<User>> {
+  try {
+    const runtime = browser.runtime;
+    const identity = (browser as any).identity;
+    if (!runtime || !identity) {
+      throw new Error('Identity API is unavailable in this context.');
+    }
+    const manifest = runtime.getManifest();
+    const clientId = (manifest as any)?.oauth2?.client_id as string | undefined;
+    const scopes = ((manifest as any)?.oauth2?.scopes as string[] | undefined) ?? [
+      'openid',
+      'email',
+      'profile',
+    ];
+    if (!clientId) {
+      throw new Error('Missing oauth2.client_id in manifest.');
+    }
+
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/auth');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('response_type', 'id_token');
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('redirect_uri', `https://${runtime.id}.chromiumapp.org`);
+    authUrl.searchParams.set('scope', scopes.join(' '));
+
+    const redirectedTo: string = await new Promise((resolve, reject) => {
+      identity.launchWebAuthFlow(
+        { url: authUrl.href, interactive: true },
+        (responseUrl: string | undefined) => {
+          const lastErr = browser.runtime.lastError;
+          if (lastErr) return reject(new Error(lastErr.message));
+          if (!responseUrl) return reject(new Error('Empty response from auth flow'));
+          resolve(responseUrl);
+        },
+      );
+    });
+
+    const url = new URL(redirectedTo);
+    const params = new URLSearchParams(url.hash.replace('#', ''));
+    const idToken = params.get('id_token');
+    if (!idToken) throw new Error('No id_token in redirect URL.');
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+    if (error) throw error;
+    return { data: data.user, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+export async function signUpWithEmailPassword(
+  email: string,
+  password: string
+): Promise<ServiceResult<User>> {
+  const supabase = getSupabase();
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    return { data: data.user, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+export async function signInWithEmailPassword(
+  email: string,
+  password: string
+): Promise<ServiceResult<User>> {
+  const supabase = getSupabase();
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return { data: data.user, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+export async function sendPasswordReset(email: string): Promise<ServiceResult<null>> {
+  const supabase = getSupabase();
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // Optionally set a redirectTo URL if you add a handler page
+    });
+    if (error) throw error;
+    return { data: null, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+export async function changePassword(newPassword: string): Promise<ServiceResult<null>> {
+  const supabase = getSupabase();
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    return { data: null, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+export async function signOut(): Promise<ServiceResult<null>> {
+  const supabase = getSupabase();
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return { data: null, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
+
+

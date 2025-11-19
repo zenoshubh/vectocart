@@ -13,5 +13,18 @@ export default defineConfig({
       },
     },
   }),
-  srcDir: "src"
+  srcDir: "src",
+  manifest: () => {
+    interface WxtEnv {
+      WXT_GOOGLE_OAUTH_CLIENT_ID?: string;
+    }
+    const env = (import.meta as { env?: WxtEnv }).env ?? {};
+    return {
+    permissions: ["identity", "sidePanel", "storage"],
+    oauth2: {
+        client_id: env.WXT_GOOGLE_OAUTH_CLIENT_ID,
+      scopes: ["openid", "email", "profile"],
+    },
+    };
+  },
 });
