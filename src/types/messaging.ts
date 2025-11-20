@@ -8,7 +8,12 @@ export type MessageType =
   | 'rooms:join'
   | 'rooms:list'
   | 'rooms:delete'
-  | 'rooms:removeMember';
+  | 'rooms:removeMember'
+  | 'products:add'
+  | 'products:list'
+  | 'products:delete'
+  | 'auth:check'
+  | 'sidepanel:open';
 
 export interface BaseMessage {
   type: MessageType;
@@ -54,13 +59,56 @@ export interface PingMessage extends BaseMessage {
   payload?: Record<string, never>;
 }
 
+export interface AddProductMessage extends BaseMessage {
+  type: 'products:add';
+  payload: {
+    roomId: string;
+    name: string;
+    price?: number | null;
+    currency?: string | null;
+    rating?: number | null;
+    image?: string | null;
+    url: string;
+    platform: 'amazon' | 'flipkart' | 'meesho';
+  };
+}
+
+export interface ListProductsMessage extends BaseMessage {
+  type: 'products:list';
+  payload: {
+    roomId: string;
+  };
+}
+
+export interface DeleteProductMessage extends BaseMessage {
+  type: 'products:delete';
+  payload: {
+    productId: string;
+  };
+}
+
+export interface AuthCheckMessage extends BaseMessage {
+  type: 'auth:check';
+  payload?: Record<string, never>;
+}
+
+export interface OpenSidepanelMessage extends BaseMessage {
+  type: 'sidepanel:open';
+  payload?: Record<string, never>;
+}
+
 export type Message = 
   | CreateRoomMessage
   | JoinRoomMessage
   | ListRoomsMessage
   | DeleteRoomMessage
   | RemoveMemberMessage
-  | PingMessage;
+  | PingMessage
+  | AddProductMessage
+  | ListProductsMessage
+  | DeleteProductMessage
+  | AuthCheckMessage
+  | OpenSidepanelMessage;
 
 export interface MessageResponse<T = unknown> {
   ok: boolean;

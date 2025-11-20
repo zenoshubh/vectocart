@@ -19,12 +19,12 @@ export function onAuthStateChanged(callback: (user: User | null) => void): () =>
 
 export async function signInWithGoogleViaIdentityFlow(): Promise<ServiceResult<User>> {
   try {
-    const runtime = browser.runtime;
-    const identity = (browser as any).identity;
-    if (!runtime || !identity) {
+    // Use WXT's browser API
+    if (!browser.runtime || !browser.identity) {
       throw new Error('Identity API is unavailable in this context.');
     }
-    const manifest = runtime.getManifest();
+    
+    const manifest = browser.runtime.getManifest();
     const clientId = (manifest as any)?.oauth2?.client_id as string | undefined;
     const scopes = ((manifest as any)?.oauth2?.scopes as string[] | undefined) ?? [
       'openid',
@@ -39,13 +39,16 @@ export async function signInWithGoogleViaIdentityFlow(): Promise<ServiceResult<U
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('response_type', 'id_token');
     authUrl.searchParams.set('access_type', 'offline');
-    authUrl.searchParams.set('redirect_uri', `https://${runtime.id}.chromiumapp.org`);
+    authUrl.searchParams.set('redirect_uri', `https://${browser.runtime.id}.chromiumapp.org`);
     authUrl.searchParams.set('scope', scopes.join(' '));
 
+    // launchWebAuthFlow uses callbacks, so we need to check lastError in the callback
+    // WXT's browser API handles this correctly
     const redirectedTo: string = await new Promise((resolve, reject) => {
-      identity.launchWebAuthFlow(
+      browser.identity.launchWebAuthFlow(
         { url: authUrl.href, interactive: true },
         (responseUrl: string | undefined) => {
+          // Check lastError (WXT's browser API provides this)
           const lastErr = browser.runtime.lastError;
           if (lastErr) return reject(new Error(lastErr.message));
           if (!responseUrl) return reject(new Error('Empty response from auth flow'));

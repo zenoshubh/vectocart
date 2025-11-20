@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserStorageAdapter } from './storage';
 
 let client: SupabaseClient | null = null;
 
@@ -11,6 +12,9 @@ interface Env {
 
 export function getSupabase(): SupabaseClient {
   if (client) return client;
+  
+  // Clear any existing client to ensure fresh session check
+  client = null;
   // Prefer standard Vite env prefix, fall back to WXT_* for compatibility
   const env = (import.meta as { env?: Env }).env ?? {};
   const url =
@@ -42,11 +46,22 @@ export function getSupabase(): SupabaseClient {
   }).catch(() => {
     // Silently fail if logger not available
   });
+  // Use custom storage adapter for browser extension compatibility
+  const storageAdapter = createBrowserStorageAdapter();
+  
+  // Extract project ref from URL for proper storage key
+  // Supabase URL format: https://<project-ref>.supabase.co
+  const urlMatch = url.match(/https?:\/\/([^.]+)\.supabase\.co/);
+  const projectRef = urlMatch ? urlMatch[1] : 'default';
+  const storageKey = `sb-${projectRef}-auth-token`;
+  
   client = createClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      detectSessionInUrl: false, // Disable URL detection in extension context
+      storage: storageAdapter,
+      storageKey: storageKey,
     },
     global: {
       headers: {
@@ -56,7 +71,23 @@ export function getSupabase(): SupabaseClient {
       },
     },
   });
+  
+  // Log storage adapter setup
+  import('@/lib/logger').then(({ logger }) => {
+    logger.debug('Supabase client created', { 
+      storageKey,
+      hasStorageAdapter: !!storageAdapter 
+    });
+  }).catch(() => {});
+  
   return client;
+}
+
+/**
+ * Reset the Supabase client (useful after sign-in/sign-out)
+ */
+export function resetSupabaseClient(): void {
+  client = null;
 }
 
 export function debugSupabaseEnv(): {
