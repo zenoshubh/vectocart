@@ -18,13 +18,22 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
+
+      - name: Verify lockfile exists
+        run: |
+          if [ ! -f "pnpm-lock.yaml" ]; then
+            echo "ERROR: pnpm-lock.yaml not found!"
+            ls -la
+            exit 1
+          fi
+          echo "Lockfile found, proceeding with installation"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
