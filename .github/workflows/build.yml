@@ -49,10 +49,10 @@ jobs:
         id: create-zip
         run: |
           # Create zip from .output/chrome-mv3 directory
+          ZIP_FILE="${{ github.workspace }}/vectocart-extension.zip"
           cd .output/chrome-mv3
-          ZIP_FILE="../../vectocart-extension.zip"
           zip -r "$ZIP_FILE" . -x "*.map" "*.zip"
-          cd ../..
+          cd "${{ github.workspace }}"
           
           echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
           echo "Zip file created: $ZIP_FILE"
