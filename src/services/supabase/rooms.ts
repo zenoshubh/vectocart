@@ -99,22 +99,34 @@ export async function joinRoomByCode(code: string): Promise<ServiceResult<Room>>
       .single();
     logger.debug('selectRoomByCode:response', { roomId: room?.id, error: roomErr?.message });
     if (roomErr) throw roomErr;
-    // Upsert membership
-    logger.debug('upsertMember:request', {
-      room_id: room.id,
-      user_id: userId,
-      role: 'member',
-    });
-    const { error: memberErr } = await supabase.from('room_members').upsert(
-      {
+    // Check if membership already exists
+    logger.debug('checkMembership:request', { room_id: room.id, user_id: userId });
+    const { data: existingMember, error: checkErr } = await supabase
+      .from('room_members')
+      .select('room_id, user_id')
+      .eq('room_id', room.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    logger.debug('checkMembership:response', { exists: !!existingMember, error: checkErr?.message });
+    if (checkErr) throw checkErr;
+    
+    // Only insert if membership doesn't exist
+    if (!existingMember) {
+      logger.debug('insertMember:request', {
+        room_id: room.id,
+        user_id: userId,
+        role: 'member',
+      });
+      const { error: memberErr } = await supabase.from('room_members').insert({
         room_id: room.id,
         user_id: userId,
         role: 'member' as RoomRole,
-      },
-      { onConflict: 'room_id,user_id' },
-    );
-    logger.debug('upsertMember:response', { error: memberErr?.message });
-    if (memberErr) throw memberErr;
+      });
+      logger.debug('insertMember:response', { error: memberErr?.message });
+      if (memberErr) throw memberErr;
+    } else {
+      logger.debug('membershipAlreadyExists', { room_id: room.id, user_id: userId });
+    }
     const result: Room = {
       id: room.id,
       name: room.name,
@@ -259,6 +271,50 @@ export async function deleteRoom(roomId: string): Promise<ServiceResult<null>> {
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     logger.error('deleteRoom:error', error);
+    return { data: null, error };
+  }
+}
+
+export async function leaveRoom(roomId: string): Promise<ServiceResult<null>> {
+  const supabase = getSupabase();
+  try {
+    logger.debug('leaveRoom:request', { roomId });
+    const userId = await getCurrentUserId();
+    
+    // Check if user is a member
+    logger.debug('checkMembership:request', { roomId, userId });
+    const { data: membership, error: memErr } = await supabase
+      .from('room_members')
+      .select('role')
+      .eq('room_id', roomId)
+      .eq('user_id', userId)
+      .single();
+    logger.debug('checkMembership:response', { hasMembership: !!membership, role: membership?.role, error: memErr?.message });
+    if (memErr) throw memErr;
+    if (!membership) {
+      throw new Error('Not a member of this room');
+    }
+
+    // Owners cannot leave their room - they must delete it instead
+    if (membership.role === 'owner') {
+      throw new Error('Owners cannot leave their room. Please delete the room instead.');
+    }
+
+    // Delete the membership
+    logger.debug('deleteMembership:request', { roomId, userId });
+    const { error: delErr } = await supabase
+      .from('room_members')
+      .delete()
+      .eq('room_id', roomId)
+      .eq('user_id', userId);
+    logger.debug('deleteMembership:response', { error: delErr?.message });
+    if (delErr) throw delErr;
+    
+    logger.debug('leaveRoom:success', { roomId });
+    return { data: null, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    logger.error('leaveRoom:error', error);
     return { data: null, error };
   }
 }

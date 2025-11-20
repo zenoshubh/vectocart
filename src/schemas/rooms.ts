@@ -21,6 +21,11 @@ export const RemoveMemberSchema = z.object({
 });
 export type RemoveMemberInput = z.infer<typeof RemoveMemberSchema>;
 
+export const LeaveRoomSchema = z.object({
+  roomId: z.string().uuid('Invalid room id'),
+});
+export type LeaveRoomInput = z.infer<typeof LeaveRoomSchema>;
+
 export const InviteSchema = z.object({
   roomId: z.string().uuid('Invalid room id'),
   invitedEmail: z.string().email('Invalid email').optional(),

@@ -9,6 +9,7 @@ export type MessageType =
   | 'rooms:list'
   | 'rooms:delete'
   | 'rooms:removeMember'
+  | 'rooms:leave'
   | 'products:add'
   | 'products:list'
   | 'products:delete'
@@ -53,6 +54,13 @@ export interface RemoveMemberMessage extends BaseMessage {
   payload: {
     roomId: string;
     userId: string;
+  };
+}
+
+export interface LeaveRoomMessage extends BaseMessage {
+  type: 'rooms:leave';
+  payload: {
+    roomId: string;
   };
 }
 
@@ -120,6 +128,7 @@ export type Message =
   | ListRoomsMessage
   | DeleteRoomMessage
   | RemoveMemberMessage
+  | LeaveRoomMessage
   | PingMessage
   | AddProductMessage
   | ListProductsMessage

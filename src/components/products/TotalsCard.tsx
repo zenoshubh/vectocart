@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import type { Product, ProductPlatform } from '@/types/products';
+import { getPlatformName, getPlatformIcon } from '@/components/products/PlatformBadge';
 
 interface TotalsCardProps {
   products: Product[];
@@ -19,9 +20,7 @@ function formatPrice(price: number, currency: string | null): string {
   return `${symbol}${price.toLocaleString()}`;
 }
 
-function formatPlatformName(platform: ProductPlatform): string {
-  return platform.charAt(0).toUpperCase() + platform.slice(1);
-}
+// Platform name formatting is now handled by getPlatformName from PlatformBadge
 
 export function TotalsCard({ products }: TotalsCardProps) {
   const totals = useMemo(() => {
@@ -116,9 +115,12 @@ export function TotalsCard({ products }: TotalsCardProps) {
                       className="flex items-center justify-between py-2"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-[#111827]">
-                          {formatPlatformName(platformTotal.platform)}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {React.createElement(getPlatformIcon(platformTotal.platform), { className: 'h-4 w-4 text-[#6B7280]' })}
+                          <span className="text-sm font-medium text-[#111827]">
+                            {getPlatformName(platformTotal.platform)}
+                          </span>
+                        </div>
                         <span className="text-xs text-[#6B7280]">
                           {platformTotal.productCount} {platformTotal.productCount === 1 ? 'product' : 'products'}
                         </span>

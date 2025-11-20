@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { browser } from 'wxt/browser';
 import { ProductVoting } from '@/components/products/ProductVoting';
 import { TotalsCard } from '@/components/products/TotalsCard';
+import { PlatformBadge } from '@/components/products/PlatformBadge';
 import { useAuth } from '@/hooks/useAuth';
 
 interface RoomDetailProps {
@@ -319,93 +320,97 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
   }, [products, searchQuery, platformFilter, sortOption]);
 
   return (
-    <div className="px-4 py-4">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-[#111827] mb-1">{room.name}</h2>
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-[#6B7280]">Code: {room.code}</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopyCode}
-            className="h-6 w-6 p-0 hover:bg-[#F8F9FA]"
-            aria-label="Copy room code"
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-[#10B981]" />
-            ) : (
-              <Copy className="h-3.5 w-3.5 text-[#6B7280]" />
-            )}
-          </Button>
+    <div className="px-3 sm:px-4 py-3 sm:py-4">
+      {/* Room Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base sm:text-lg font-semibold text-[#111827] mb-1 truncate">{room.name}</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#6B7280] bg-[#F8F9FA] px-1.5 sm:px-2 py-0.5 rounded font-mono">
+              {room.code}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCode}
+              className="h-5 w-5 p-0 hover:bg-[#F8F9FA] shrink-0"
+              aria-label="Copy room code"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 text-[#10B981]" />
+              ) : (
+                <Copy className="h-3 w-3 text-[#6B7280]" />
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onMembersClick}
-          className="border-[#E5E7EB] hover:bg-[#F8F9FA]"
-        >
-          <Users className="h-4 w-4 mr-2" />
-          Members
-        </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:ml-4 shrink-0 flex-wrap">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loadProducts(false)}
-            disabled={refreshing}
-            className="border-[#E5E7EB] hover:bg-[#F8F9FA]"
-            aria-label="Refresh products"
+            onClick={onMembersClick}
+            className="border-[#E5E7EB] hover:bg-[#F8F9FA] text-xs sm:text-sm"
           >
-            {refreshing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
+            <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Members</span>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleShare}
-            disabled={sharing}
-            className="border-[#E5E7EB] hover:bg-[#F8F9FA]"
-          >
-            {sharing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Share2 className="h-4 w-4 mr-2" />
-            )}
-            Share
-          </Button>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadProducts(false)}
+              disabled={refreshing}
+              className="border-[#E5E7EB] hover:bg-[#F8F9FA] h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
+              aria-label="Refresh products"
+            >
+              {refreshing ? (
+                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShare}
+              disabled={sharing}
+              className="border-[#E5E7EB] hover:bg-[#F8F9FA] text-xs sm:text-sm"
+            >
+              {sharing ? (
+                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2 animate-spin" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+              )}
+              <span className="hidden sm:inline">Share</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Search, Filter, and Sort Controls */}
       {products.length > 0 && (
-        <div className="mb-4 space-y-3">
+        <div className="mb-4 space-y-2 sm:space-y-3">
           {/* Search Bar */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#6B7280]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search products..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent"
+              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent"
             />
           </div>
 
           {/* Filter and Sort Row */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {/* Platform Filter */}
             <div className="flex-1 relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#6B7280]" />
               <select
                 value={platformFilter}
                 onChange={(e) => setPlatformFilter(e.target.value as ProductPlatform | 'all')}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent appearance-none bg-white"
+                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">All Platforms</option>
                 <option value="amazon">Amazon</option>
@@ -416,11 +421,11 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
 
             {/* Sort Dropdown */}
             <div className="flex-1 relative">
-              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#6B7280]" />
               <select
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value as SortOption)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent appearance-none bg-white"
+                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#E40046] focus:border-transparent appearance-none bg-white"
               >
                 <optgroup label="Date Added">
                   <option value="date-desc">Newest First</option>
@@ -486,15 +491,15 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
         <div className="space-y-3">
           {filteredAndSortedProducts.map((product) => (
             <Card key={product.id} className="border border-[#E5E7EB] hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex gap-4">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex gap-3 sm:gap-4">
                   {/* Product Image */}
                   {product.image && (
                     <div className="flex-shrink-0">
                       <img
                         src={product.image}
                         alt={product.name}
-                        className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB]"
+                        className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg border border-[#E5E7EB]"
                         onError={(e) => {
                           // Hide image on error
                           (e.target as HTMLImageElement).style.display = 'none';
@@ -544,9 +549,7 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
                         </div>
                       )}
                       
-                      <span className="text-xs text-[#6B7280] bg-[#F8F9FA] px-2 py-0.5 rounded">
-                        {product.platform}
-                      </span>
+                      <PlatformBadge platform={product.platform} />
                     </div>
                     
                     <div className="flex items-center justify-between mb-2">

@@ -3,12 +3,12 @@
  */
 
 import { useState, useCallback } from 'react';
-import { listMyRooms, createRoom, joinRoomByCode, deleteRoom } from '@/services/supabase/rooms';
+import { listMyRooms, createRoom, joinRoomByCode, deleteRoom, leaveRoom, removeMember } from '@/services/supabase/rooms';
 import type { Room } from '@/types/rooms';
 import { logger } from '@/lib/logger';
 import { formatSupabaseError } from '@/lib/errors';
 import { sendMessage, withFallback } from '@/lib/messaging';
-import type { CreateRoomMessage, JoinRoomMessage, DeleteRoomMessage } from '@/types/messaging';
+import type { CreateRoomMessage, JoinRoomMessage, DeleteRoomMessage, LeaveRoomMessage, RemoveMemberMessage } from '@/types/messaging';
 
 export function useRooms() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -140,6 +140,71 @@ export function useRooms() {
     }
   }, [loadRooms]);
 
+  const leaveRoomHandler = useCallback(async (roomId: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    logger.debug('useRooms:leaveRoom:request', { roomId });
+
+    try {
+      const message: LeaveRoomMessage = {
+        type: 'rooms:leave',
+        payload: { roomId },
+      };
+
+      const response = await withFallback(
+        () => sendMessage(message),
+        () => leaveRoom(roomId),
+      );
+
+      if (!response.ok || response.error) {
+        throw response.error || new Error('Failed to leave room');
+      }
+
+      await loadRooms();
+      logger.debug('useRooms:leaveRoom:success', { roomId });
+      return true;
+    } catch (err) {
+      const errorMessage = formatSupabaseError(err);
+      logger.error('useRooms:leaveRoom:error', err);
+      setError(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadRooms]);
+
+  const removeMemberHandler = useCallback(async (roomId: string, userId: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    logger.debug('useRooms:removeMember:request', { roomId, userId });
+
+    try {
+      const message: RemoveMemberMessage = {
+        type: 'rooms:removeMember',
+        payload: { roomId, userId },
+      };
+
+      const response = await withFallback(
+        () => sendMessage(message),
+        () => removeMember(roomId, userId),
+      );
+
+      if (!response.ok || response.error) {
+        throw response.error || new Error('Failed to remove member');
+      }
+
+      logger.debug('useRooms:removeMember:success', { roomId, userId });
+      return true;
+    } catch (err) {
+      const errorMessage = formatSupabaseError(err);
+      logger.error('useRooms:removeMember:error', err);
+      setError(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     rooms,
     loading,
@@ -148,6 +213,8 @@ export function useRooms() {
     createRoom: createRoomHandler,
     joinRoom,
     deleteRoom: deleteRoomHandler,
+    leaveRoom: leaveRoomHandler,
+    removeMember: removeMemberHandler,
   };
 }
 

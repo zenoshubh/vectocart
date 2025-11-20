@@ -40,6 +40,12 @@ function AppContent() {
     setCurrentView('room-members');
   }
 
+  function handleLeaveRoom() {
+    // Navigate to dashboard (rooms list) after leaving
+    setCurrentView('rooms');
+    setSelectedRoom(null);
+  }
+
   async function handleRefresh() {
     setRefreshing(true);
     setRefreshTrigger((prev) => prev + 1);
@@ -103,7 +109,7 @@ function AppContent() {
   // Show main app when authenticated
   return (
     <ErrorBoundary>
-      <div className="min-h-dvh bg-white text-[#111827] flex flex-col">
+      <div className="min-h-dvh bg-white text-[#111827] flex flex-col overflow-hidden">
         <Header
           showBack={showBack}
           onBack={handleBack}
@@ -111,7 +117,7 @@ function AppContent() {
           refreshing={refreshing}
         />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {currentView === 'rooms' && (
             <RoomsView
               onRoomClick={handleRoomClick}
@@ -126,7 +132,7 @@ function AppContent() {
           )}
 
           {currentView === 'room-members' && selectedRoom && (
-            <RoomMembers room={selectedRoom} onBack={handleBack} />
+            <RoomMembers room={selectedRoom} onBack={handleBack} onLeave={handleLeaveRoom} />
           )}
         </main>
         <Toaster />

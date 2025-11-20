@@ -1,0 +1,84 @@
+name: Build and Release Extension
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build extension
+        run: pnpm build
+
+      - name: Create zip file from build
+        id: create-zip
+        run: |
+          # Create zip from .output/chrome-mv3 directory
+          cd .output/chrome-mv3
+          ZIP_FILE="../../vectocart-extension.zip"
+          zip -r "$ZIP_FILE" . -x "*.map" "*.zip"
+          cd ../..
+          
+          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "Zip file created: $ZIP_FILE"
+          ls -lh "$ZIP_FILE"
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.create-zip.outputs.zip_file }}
+          tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: Release v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          body: |
+            ## VectoCart Extension Build
+            
+            **Version:** ${{ steps.version.outputs.version }}
+            **Build Number:** ${{ github.run_number }}
+            **Commit:** ${{ github.sha }}
+            
+            ### Installation Instructions
+            
+            1. Download the `vectocart-extension.zip` file above
+            2. Extract the zip file
+            3. Open Chrome/Edge and go to `chrome://extensions/` (or `edge://extensions/`)
+            4. Enable "Developer mode" (toggle in top right)
+            5. Click "Load unpacked"
+            6. Select the extracted folder
+            
+            ### Changes
+            
+            See commit: ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

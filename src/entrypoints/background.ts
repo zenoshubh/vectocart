@@ -74,6 +74,19 @@ export default defineBackground(() => {
             respond({ ok: !res.error, data: res.data, error: res.error });
             return;
           }
+          case 'rooms:leave': {
+            const { leaveRoom } = await import('@/services/supabase/rooms');
+            const { LeaveRoomSchema } = await import('@/schemas/rooms');
+            try {
+              const validated = LeaveRoomSchema.parse(msg.payload);
+              const res = await leaveRoom(validated.roomId);
+              respond({ ok: !res.error, data: res.data, error: res.error });
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              respond({ ok: false, data: null, error });
+            }
+            return;
+          }
           case 'products:add': {
             const { addProduct } = await import('@/services/supabase/products');
             const { AddProductSchema } = await import('@/schemas/products');
