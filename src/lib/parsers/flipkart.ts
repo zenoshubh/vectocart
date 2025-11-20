@@ -46,8 +46,8 @@ export function parseFlipkart(): ParsedProduct {
   if (productSchema?.name) {
     name = productSchema.name;
   } else {
-    // DOM fallback: .B_NuCI is the standard Flipkart product title class
-    const nameEl = document.querySelector('.B_NuCI');
+    // DOM fallback: .VU-ZEz is the current Flipkart product title class
+    const nameEl = document.querySelector('.VU-ZEz');
     name = nameEl ? nameEl.textContent?.trim() ?? null : null;
   }
 
@@ -59,8 +59,8 @@ export function parseFlipkart(): ParsedProduct {
     price = parseFloat(String(productSchema.offers.price));
     currency = productSchema.offers.priceCurrency || 'INR';
   } else {
-    // DOM fallback: ._30jeq3 is the current price class
-    const priceEl = document.querySelector('._30jeq3');
+    // DOM fallback: .Nx9bqj.CxhGGd is the current price class
+    const priceEl = document.querySelector('.Nx9bqj.CxhGGd');
     if (priceEl) {
       const priceText = priceEl.textContent?.trim() ?? '';
       const priceMatch = priceText.match(/₹?\s*([\d,]+)/);
@@ -70,13 +70,23 @@ export function parseFlipkart(): ParsedProduct {
     }
   }
 
-  // Rating - from JSON-LD schema
+  // Rating - from JSON-LD schema, fallback to DOM
   let rating: number | null = null;
   if (productSchema?.aggregateRating?.ratingValue) {
     rating = parseFloat(String(productSchema.aggregateRating.ratingValue));
+  } else {
+    // DOM fallback: .XQDdHH contains the rating
+    const ratingEl = document.querySelector('.XQDdHH');
+    if (ratingEl) {
+      const ratingText = ratingEl.textContent?.trim() ?? '';
+      const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
+      if (ratingMatch) {
+        rating = parseFloat(ratingMatch[1]);
+      }
+    }
   }
 
-  // Image - from JSON-LD schema
+  // Image - from JSON-LD schema, fallback to DOM
   let image: string | null = null;
   if (productSchema?.image) {
     const imageData = productSchema.image;
@@ -85,6 +95,17 @@ export function parseFlipkart(): ParsedProduct {
     if (image) {
       image = image.replace(/\/\d+\/\d+\//, '/300/300/');
       image = image.replace(/\?q=\d+/, '?q=90');
+    }
+  } else {
+    // DOM fallback: .DByuf4, .IZexXJ, or .jLEJ7H classes
+    const imageEl = document.querySelector('.DByuf4, .IZexXJ, .jLEJ7H');
+    if (imageEl && imageEl.tagName === 'IMG') {
+      image = (imageEl as HTMLImageElement).src;
+      // Clean up image URL for better quality
+      if (image) {
+        image = image.replace(/\/\d+\/\d+\//, '/832/832/');
+        image = image.replace(/\?q=\d+/, '?q=90');
+      }
     }
   }
 

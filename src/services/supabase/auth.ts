@@ -1,11 +1,7 @@
 import type { User } from '@supabase/supabase-js';
+import type { ServiceResult } from '@/types/rooms';
 import { getSupabase } from './client';
 import { browser } from 'wxt/browser';
-
-export interface ServiceResult<T> {
-  data: T | null;
-  error: Error | null;
-}
 
 export function onAuthStateChanged(callback: (user: User | null) => void): () => void {
   const supabase = getSupabase();
@@ -69,62 +65,6 @@ export async function signInWithGoogleViaIdentityFlow(): Promise<ServiceResult<U
     });
     if (error) throw error;
     return { data: data.user, error: null };
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return { data: null, error };
-  }
-}
-
-export async function signUpWithEmailPassword(
-  email: string,
-  password: string
-): Promise<ServiceResult<User>> {
-  const supabase = getSupabase();
-  try {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-    return { data: data.user, error: null };
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return { data: null, error };
-  }
-}
-
-export async function signInWithEmailPassword(
-  email: string,
-  password: string
-): Promise<ServiceResult<User>> {
-  const supabase = getSupabase();
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return { data: data.user, error: null };
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return { data: null, error };
-  }
-}
-
-export async function sendPasswordReset(email: string): Promise<ServiceResult<null>> {
-  const supabase = getSupabase();
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      // Optionally set a redirectTo URL if you add a handler page
-    });
-    if (error) throw error;
-    return { data: null, error: null };
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return { data: null, error };
-  }
-}
-
-export async function changePassword(newPassword: string): Promise<ServiceResult<null>> {
-  const supabase = getSupabase();
-  try {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) throw error;
-    return { data: null, error: null };
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     return { data: null, error };

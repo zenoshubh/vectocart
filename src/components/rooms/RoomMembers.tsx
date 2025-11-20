@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Loading } from '@/components/layout/Loading';
 import { Loader2, Mail } from 'lucide-react';
 import type { Room } from '@/types/rooms';
 import { getSupabase } from '@/services/supabase/client';
@@ -101,7 +102,7 @@ export function RoomMembers({ room, onBack }: RoomMembersProps) {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-6 w-6 text-[#E40046] animate-spin" />
+          <Loading text="Loading members..." subtitle="Fetching room participants" fullScreen={false} size="default" />
         </div>
       ) : error ? (
         <div className="p-3 rounded-lg bg-red-50 border border-red-200">

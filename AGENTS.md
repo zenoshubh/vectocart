@@ -1,210 +1,236 @@
-# VectoCart - Browser Extension Engineering Guide
+# VectoCart - AI Coding Agent Guide
 
-VectoCart is a cross‑browser, MV3 WebExtensions project built with WXT and TypeScript. It injects an “Add to VectoCart” button on supported e‑commerce sites, syncs shared carts via a backend, and provides a side panel UI for rooms, products, and voting.
+This guide provides essential information for AI coding agents working on the VectoCart codebase.
 
 ## Tech Stack
-- MV3 WebExtensions via WXT (Vite + TS, typed manifest, multi‑entry)
-- TypeScript (strict), ESLint + Prettier
-- UI: React 19 + Tailwind v4 for side panel/options pages
-- Messaging: chrome.runtime message ports with zod schemas
-- Storage:
-  - In‑extension: chrome.storage.local/session and IndexedDB (idb)
-- Backend: Firebase (Firestore, Auth), using client SDK only (no Cloud Functions)
 
-## Design System
-- Colors (from the provided UI reference):
-  - primary: #E40046
-  - primary-600: #CC003F
-  - primary-700: #B00037
-  - surface: #FFFFFF
-  - surface-2: #F8F9FA
-  - border: #E5E7EB
-  - text: #111827
-  - text-muted: #6B7280
-  - icon: #6B7280
-  - success: #10B981
-  - danger: #EF4444
-- Usage:
-  - Use primary for top bars, primary actions, and brand elements; use white text/icons on primary.
-  - Use surface/surface-2 for panels and inputs; border for dividers.
-  - Maintain accessible contrast (WCAG AA) for text on colored backgrounds.
-  - Do not change element sizes on hover; use color/opacity for affordances.
-- Tailwind theme mapping (to add in Tailwind config):
+- **Framework**: WXT (`^0.20.6`) with React 19, TypeScript 5.9
+- **UI**: Tailwind CSS 4, shadcn/ui components, Radix UI primitives
+- **Backend**: Supabase (Auth, PostgreSQL, Storage)
+- **Validation**: Zod schemas for all external data
+- **State**: React hooks, contexts
 
-```ts
-// tailwind theme extension (example)
-theme: {
-  extend: {
-    colors: {
-      primary: {
-        DEFAULT: '#E40046',
-        600: '#CC003F',
-        700: '#B00037',
-      },
-      surface: {
-        DEFAULT: '#FFFFFF',
-        2: '#F8F9FA',
-      },
-      border: '#E5E7EB',
-      text: {
-        DEFAULT: '#111827',
-        muted: '#6B7280',
-      },
-      icon: '#6B7280',
-      success: '#10B981',
-      danger: '#EF4444',
-    },
-  },
+## Project Structure
+
+```
+src/
+├── assets/              # CSS, images
+├── components/          # React components (organized by feature)
+│   ├── auth/           # AuthForm, UsernameSetup
+│   ├── rooms/          # RoomDetail, RoomMembers, RoomsList, RoomsView
+│   ├── products/       # ProductVoting
+│   ├── layout/         # Header, ErrorBoundary
+│   └── ui/             # shadcn/ui primitives
+├── entrypoints/        # WXT entry points
+│   ├── background.ts   # Service worker
+│   ├── content.ts      # Content script
+│   └── sidepanel/      # React app
+├── hooks/              # Custom React hooks
+├── services/supabase/   # Backend service layer
+├── lib/                # Utilities
+│   ├── content-script/ # Content script utilities
+│   ├── parsers/        # Product parsers
+│   └── ...            # Other utilities
+├── schemas/            # Zod validation schemas
+├── types/              # TypeScript type definitions
+└── contexts/           # React contexts
+```
+
+## Path Aliases
+
+- `@/` → `src/` (configured in `tsconfig.json` and `wxt.config.ts`)
+- Always use `@/` for imports: `@/components`, `@/lib`, `@/services`, etc.
+
+## Core Principles
+
+### 1. Type Safety
+- Use TypeScript interfaces (not types) for public contracts
+- Validate all external data with Zod schemas
+- No `any` - use `unknown` + type narrowing
+- All service functions return `ServiceResult<T> = { data: T | null; error: Error | null }`
+
+### 2. Component Organization
+- Group components by feature in subfolders: `auth/`, `rooms/`, `products/`, `layout/`
+- UI primitives stay in `ui/`
+- Use descriptive, PascalCase component names
+
+### 3. Service Layer Pattern
+- All Supabase calls go through `services/supabase/*`
+- Background script handles all backend operations
+- UI/content scripts communicate via messaging (see below)
+- Services return `ServiceResult<T>` pattern
+
+### 4. Messaging Architecture
+- Content script and side panel → Background script (via `sendMessage`)
+- Background script → Supabase backend
+- All messages validated with Zod schemas in `schemas/*`
+- Message types defined in `types/messaging.ts`
+
+### 5. Error Handling
+- Services return `{ data, error }` pattern
+- Use `formatSupabaseError()` from `@/lib/errors` for user-friendly messages
+- Show toasts for transient errors, inline errors for forms
+- Never swallow errors silently
+
+## Coding Guidelines
+
+### File Naming
+- Components: PascalCase (e.g., `AuthForm.tsx`)
+- Utilities: camelCase (e.g., `utils.ts`, `logger.ts`)
+- Types: camelCase (e.g., `products.ts`, `rooms.ts`)
+
+### Imports Order
+1. React/React DOM
+2. Third-party libraries
+3. Internal components (`@/components`)
+4. Hooks (`@/hooks`)
+5. Services (`@/services`)
+6. Utilities (`@/lib`)
+7. Types (`@/types`)
+8. Schemas (`@/schemas`)
+
+### Component Structure
+```tsx
+// 1. Imports
+import React from 'react';
+import { Button } from '@/components/ui/button';
+
+// 2. Types/Interfaces
+interface ComponentProps {
+  // ...
+}
+
+// 3. Component
+export function Component({ ... }: ComponentProps) {
+  // Hooks first
+  // State
+  // Effects
+  // Handlers
+  // Render
 }
 ```
 
-## Project Layout (WXT)
-This project is configured to use a dedicated `src/` directory via WXT (`srcDir: 'src'` in `wxt.config.ts`). WXT keeps a flat structure inside `src/`.
-
-Key directories at the project root:
-- `.output/`               // build artifacts
-- `.wxt/`                  // generated WXT TS config
-- `public/`                // copied as‑is
-- `wxt.config.ts`          // main WXT config (typed)
-- `web-ext.config.ts`      // browser startup config (optional)
-- `tsconfig.json`          // TypeScript config
-- `package.json`
-
-Key directories under `src/`:
-- `assets/`                // CSS, images, assets processed by WXT
-- `components/`            // auto‑imported UI components (e.g., shadcn/ui)
-- `entrypoints/`           // background/content/sidepanel/options entry files
-- `hooks/`                 // auto‑imported React hooks
-- `services/`              // client service layer (e.g., Firebase adapters)
-- `services/firebase/`     // Firebase client SDK wrappers
-- `services/firebase/app.ts`         // initialize app (reads env)
-- `services/firebase/auth.ts`        // auth helpers
-- `services/firebase/firestore.ts`   // rooms/products/votes adapters
-<!-- no Cloud Functions on free tier -->
-- `lib/`                   // utilities like `cn`, helpers
-- `modules/`               // local WXT modules (optional)
-- `types/`                 // ambient/type declarations
-- `utils/`                 // auto‑imported utilities (if you prefer splitting from lib)
-- `app.config.ts`          // runtime config (optional)
-
-Our `wxt.config.ts` sets `srcDir` explicitly:
-
+### Service Functions
 ```ts
-import { defineConfig } from "wxt";
+import type { ServiceResult } from '@/types/rooms';
 
-export default defineConfig({
-  srcDir: "src",
-  modules: ["@wxt-dev/module-react"],
-});
+export async function serviceFunction(): Promise<ServiceResult<DataType>> {
+  try {
+    // Implementation
+    return { data: result, error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { data: null, error };
+  }
+}
 ```
 
-### Firebase Placement & Usage
-- All Firebase client code lives under `src/services/firebase/*` as a thin, typed service layer.
-- Background (service worker) performs Firebase calls; UI/content communicate via messaging.
-- Keep runtime‑safe config in `src/config/firebase.ts` and read keys from `.env` / `.env.publish`.
-- We do not use Cloud Functions on the free tier; any server‑like logic must be done client‑side with Firestore rules enforcing security.
-- Return `{ data, error }` from service functions; validate external data with zod at boundaries.
+## Key Conventions
 
-## Core Principles
-1. Type Safety First
-   - Use interfaces over types for external/public contracts.
-   - Use zod to validate all cross‑context messages and external data.
-   - No `any`. Prefer `unknown` + narrowing for untrusted inputs.
-2. MV3 Lifecycle Correctness
-   - Background is event‑driven and stateless; offload heavy/DOM work to offscreen docs or the side panel.
-   - Prefer dynamic content script registration and narrow host permissions.
-3. Security & Privacy
-   - Principle of least privilege: minimal permissions and host matches; use optional permissions when possible.
-   - Validate every message boundary. Never trust content‑script data.
-   - No remote code execution. Respect CSP; no inline scripts.
-   - Transparent data practices; easy data export/delete paths.
-4. Performance
-   - Small content scripts; lazy load heavy logic and site rules.
-   - Throttle DOM observers; detach on navigation.
-   - Use alarms/events over setInterval in background.
-5. Reliability
-   - Idempotent operations; guard against duplicate room joins and vote races.
-   - Use backend atomic increments or transactions where needed.
-   - Feature flag risky scrapers; fail soft with user feedback.
+### Constants
+- Define in `@/lib/constants.ts`
+- Use UPPER_SNAKE_CASE for constants
+- Export only what's used
 
-## Features (Scope v1)
-- Rooms
-  - Create/join via short codes; owner badge; remove members (owner only).
-  - Share code via Web Share API or clipboard.
-- Shared Cart
-  - Real‑time list, sort/filter, open product links, remove items (policy‑bound).
-- Product Voting
-  - Single vote per user per product (up/down), change/remove.
-- Content Scripts
-  - Supported sites: Amazon (.in/.com), Flipkart, Myntra, AJIO, Meesho.
-  - Inject “Add to VectoCart” button; robust selectors + fallbacks.
-- Side Panel
-  - Auth gate, rooms page, cart page, members page.
+### Logging
+- Use `logger` from `@/lib/logger` (dev-only)
+- Structured logging with context objects
+- No PII in logs
 
-## Messaging Contracts (zod‑validated)
-- content → background: AddProduct { name, url, price?, image?, platform }
-- background → backend: createProduct(roomId, payload)
-- panel ↔ background: session/room state sync, auth events
-- background → content: optional toast/feedback
+### Styling
+- Use Tailwind utility classes
+- Design tokens: `#E40046` (primary), `#F8F9FA` (surface-2), etc.
+- See `@/lib/constants.ts` for color constants
 
-All messages live in `src/messaging` with:
-- Schema: zod definitions
-- Types: inferred TS types
-- Router: background message router with per‑message auth and permission checks
+### Content Scripts
+- Utilities in `@/lib/content-script/`
+- Use Shadow DOM for style isolation
+- Handle SPA navigation with `wxt:locationchange` events
 
-## Storage & Caching
-- chrome.storage.session for ephemeral session state where available, local otherwise.
-- IndexedDB for large caches (e.g., rule sets); wrap with `idb`.
-- Namespaced keys: `vc:*` to avoid collisions.
-- Do not store secrets in extension storage.
+## Database Schema (Supabase)
 
-## Backend Contracts (Draft)
-- Auth: Firebase Auth (Web Extension SDK). Use ID tokens; never pass raw credentials cross‑context.
-- Rooms:
-  - Create: { name } → { id, code, createdBy, createdAt }
-  - Join: { code } → { room }
-  - Members subcollection with role, joinedAt
-- Products:
-  - Add: { roomId, product } → document with vote counters
-  - Remove: owner/member‑policy enforced by rules
-- Votes:
-  - Upsert per user per product; atomic counter updates or server‑side triggers
-- Security Rules/Policies:
-  - Read/write limited to room members; owner‑only destructive ops
-  - One vote per user per product
+### Tables
+- `user_profiles` - User usernames
+- `rooms` - Shopping rooms with unique 6-char codes
+- `room_members` - Room membership (owner/member roles)
+- `products` - Products in rooms
+- `votes` - Product votes (upvote/downvote)
 
-## Permissions (Minimum)
-- "sidePanel", "storage", "scripting"
-- host_permissions: only the domains we actively support (per environment)
-- optional host permissions for future sites
-- clipboardWrite only if share fallback requires it
+### Security
+- Row Level Security (RLS) policies enforce access
+- Owner-only operations: delete room, remove members
+- Product deletion: product owner or room owner only
 
-## Error Handling & UX
-- Every async action returns `{ data, error }` from services.
-- Toasts/snackbars for transient outcomes; inline errors for forms.
-- Detect and communicate site rule failures with actionable messages.
+## Common Patterns
 
-## Coding Guidelines
-- Functional, modular code; avoid classes unless mandated by APIs.
-- Descriptive names: `isEnabled`, `hasPermission`, `currentRoomId`.
-- Early returns; minimal nesting; no empty catch blocks.
-- Comments only for non‑obvious rationale, invariants, or caveats.
+### Authentication Check
+```ts
+const { isAuthenticated, loading } = useAuth();
+if (!isAuthenticated) {
+  // Show auth form
+}
+```
 
-## Implementation Order (Milestones)
-1) Base setup: WXT, TS, lint, tailwind, typed manifest
-2) Messaging skeleton with zod; background router
-3) Side panel scaffold (auth gate, rooms UI, toasts)
-4) Content script injector + per‑site rule modules
-5) Backend service adapters (Auth, Rooms, Products, Votes)
-6) Voting and counters (atomic updates or server function)
-7) Security hardening (permissions, validation, rules)
-8) Store assets
+### Toast Notifications
+```ts
+const toast = useToast();
+toast.showSuccess('Success message');
+toast.showError('Error message');
+```
 
-## Operational Notes
-- Keep Firebase/keys public‑safe; enforce access in rules, not secrets.
-- Site rule updates should be data‑driven when feasible (remote JSON with signature) and cached.
-- Log sparingly; no user PII in logs. Disable verbose logs in production.
+### Room Operations
+```ts
+const { rooms, createRoom, joinRoom, deleteRoom } = useRooms();
+```
 
-This document describes the engineering contract for VectoCart. Changes to architecture, permissions, or data contracts must be reviewed and reflected here before implementation.
+### Product Parsing
+```ts
+import { detectPlatform, parseProduct } from '@/lib/parsers';
+const platform = detectPlatform(hostname);
+const productData = parseProduct(platform);
+```
 
+## What NOT to Do
 
+- ❌ Don't use `any` types
+- ❌ Don't bypass service layer (direct Supabase calls from UI)
+- ❌ Don't create duplicate `ServiceResult` interfaces
+- ❌ Don't add unused dependencies
+- ❌ Don't mix component categories (keep auth/rooms/products/layout separate)
+- ❌ Don't use inline styles (use Tailwind classes)
+- ❌ Don't create empty catch blocks
+- ❌ Don't store secrets in extension storage
+
+## Environment Variables
+
+- `VITE_SUPABASE_URL` - Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `WXT_GOOGLE_OAUTH_CLIENT_ID` - Google OAuth2 client ID
+
+## Extension ID Consistency
+
+- The extension has a fixed `"key"` field in the manifest (configured in `wxt.config.ts`)
+- This ensures the extension ID is **identical across all machines and builds**
+- Critical for:
+  - OAuth redirect URIs: `https://{extension-id}.chromiumapp.org`
+  - Storage persistence across reloads
+  - Team development (same ID for all developers)
+- The extension ID is calculated from the public key, so it's deterministic
+
+## Quick Reference
+
+### Import Paths
+- Components: `@/components/{category}/{ComponentName}`
+- Services: `@/services/supabase/{service}`
+- Types: `@/types/{domain}`
+- Schemas: `@/schemas/{domain}`
+- Utils: `@/lib/{util}`
+
+### Build Commands
+- `pnpm dev` - Development (Chrome)
+- `pnpm build` - Production build
+- `pnpm compile` - Type check only
+
+---
+
+**Remember**: When in doubt, follow existing patterns in the codebase. Consistency is key.

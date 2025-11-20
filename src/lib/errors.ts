@@ -39,6 +39,19 @@ export function toErrorMessage(error: unknown): string {
  * Creates a user-friendly error message from Supabase errors
  */
 export function formatSupabaseError(error: unknown): string {
+  // Check for custom duplicate product error first
+  if (isDuplicateProductError(error)) {
+    if (error instanceof DuplicateProductError) {
+      return error.message;
+    }
+    // Handle serialized errors
+    const message = toErrorMessage(error);
+    if (message.includes('already in the room')) {
+      return message;
+    }
+    return 'This product is already in the room';
+  }
+  
   const message = toErrorMessage(error);
   
   // Map common Supabase error codes to user-friendly messages
@@ -67,5 +80,45 @@ export function createAppError(error: unknown, code?: string): AppError {
     code,
     originalError: error instanceof Error ? error : undefined,
   };
+}
+
+/**
+ * Custom error class for duplicate products
+ */
+export class DuplicateProductError extends Error {
+  public readonly code = 'DUPLICATE_PRODUCT';
+  
+  constructor(message: string = 'This product is already in the room') {
+    super(message);
+    this.name = 'DuplicateProductError';
+    Object.setPrototypeOf(this, DuplicateProductError.prototype);
+  }
+}
+
+/**
+ * Check if an error is a duplicate product error
+ * Works even when error is serialized through messages
+ */
+export function isDuplicateProductError(error: unknown): boolean {
+  if (error instanceof DuplicateProductError) {
+    return true;
+  }
+  if (error && typeof error === 'object') {
+    const err = error as Record<string, unknown>;
+    // Check for code or message
+    if (err.code === 'DUPLICATE_PRODUCT') {
+      return true;
+    }
+    if (typeof err.message === 'string' && 
+        (err.message.includes('already in the room') || 
+         err.message.includes('duplicate product'))) {
+      return true;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message.includes('already in the room') || 
+           error.message.includes('duplicate product');
+  }
+  return false;
 }
 

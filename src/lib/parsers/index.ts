@@ -14,7 +14,7 @@ export type { ParsedProduct };
  * Detect platform from hostname
  */
 export function detectPlatform(hostname: string): ProductPlatform | null {
-  if (hostname.includes('amazon.')) {
+  if (hostname.includes('amazon.in')) {
     return 'amazon';
   }
   if (hostname.includes('flipkart.com')) {

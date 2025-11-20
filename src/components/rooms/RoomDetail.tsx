@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Loading } from '@/components/layout/Loading';
 import { Users, Package, Loader2, Share2, Copy, Check, ExternalLink, Star, Trash2, RefreshCw, Search, Filter, ArrowUpDown } from 'lucide-react';
 import type { Room } from '@/types/rooms';
-import type { Product, ProductPlatform } from '@/types/products';
+import type { Product, ProductPlatform, VoteType } from '@/types/products';
 import { shareRoom } from '@/lib/share';
 import { useToast } from '@/hooks/useToast';
 import { sendMessage, withFallback } from '@/lib/messaging';
-import { listProductsByRoom } from '@/services/supabase/products';
+import { listProductsByRoom, deleteProduct } from '@/services/supabase/products';
 import { formatSupabaseError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { browser } from 'wxt/browser';
+import { ProductVoting } from '@/components/products/ProductVoting';
+import { TotalsCard } from '@/components/products/TotalsCard';
+import { useAuth } from '@/hooks/useAuth';
 
 interface RoomDetailProps {
   room: Room;
@@ -18,21 +23,34 @@ interface RoomDetailProps {
   onMembersClick: () => void;
 }
 
-type SortOption = 'date-asc' | 'date-desc' | 'rating-asc' | 'rating-desc' | 'price-asc' | 'price-desc';
+type SortOption = 'date-asc' | 'date-desc' | 'rating-asc' | 'rating-desc' | 'price-asc' | 'price-desc' | 'votes-desc' | 'votes-asc';
 
 export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState<ProductPlatform | 'all'>('all');
   const [sortOption, setSortOption] = useState<SortOption>('date-desc');
   const toast = useToast();
 
-  const loadProducts = React.useCallback(async (showLoading = true) => {
+  // Check if current user is room owner
+  const isRoomOwner = user?.id === room.createdBy;
+
+  // Helper function to check if user can delete a product
+  const canDeleteProduct = (product: Product): boolean => {
+    if (!user) return false;
+    // User can delete if they added the product OR if they're the room owner
+    return product.addedBy === user.id || isRoomOwner;
+  };
+
+  const loadProducts = React.useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) {
       setLoading(true);
     } else {
@@ -88,22 +106,111 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
 
   // Listen for storage changes (when products are added from content script)
   useEffect(() => {
-    const handleStorageChange = (changes: Record<string, browser.storage.StorageChange>) => {
-      if (changes['vectocart:lastProductAdded'] && changes['vectocart:lastProductRoomId']) {
-        const lastRoomId = changes['vectocart:lastProductRoomId'].newValue;
-        // Only refresh if the product was added to this room
-        if (lastRoomId === room.id) {
-          logger.debug('RoomDetail:storageChange:productAdded', { roomId: room.id });
-          loadProducts(false);
+    let lastCheckedTimestamp = 0;
+    
+    const checkStorageForUpdates = async () => {
+      try {
+        const storage = await browser.storage.local.get([
+          'vectocart:lastProductAdded',
+          'vectocart:lastProductRoomId'
+        ]);
+        
+        const timestamp = storage['vectocart:lastProductAdded'] as number | undefined;
+        const roomId = storage['vectocart:lastProductRoomId'] as string | undefined;
+        
+        if (timestamp && roomId && roomId === room.id) {
+          // Only refresh if this is a new timestamp
+          if (timestamp > lastCheckedTimestamp) {
+            lastCheckedTimestamp = timestamp;
+            logger.debug('RoomDetail:storageCheck:productAdded', { roomId: room.id, timestamp });
+            // Refresh immediately - background script only sets storage after DB write completes
+            loadProducts(false);
+          }
         }
+      } catch (err) {
+        logger.error('RoomDetail:storageCheck:error', err);
       }
     };
 
+    const handleStorageChange = (
+      changes: Record<string, browser.storage.StorageChange>,
+      areaName: string
+    ) => {
+      try {
+        // Only listen to local storage changes
+        if (areaName !== 'local') return;
+        
+        logger.debug('RoomDetail:storageChange:detected', { 
+          changes: Object.keys(changes),
+          roomId: room.id,
+          areaName
+        });
+        
+        if (changes['vectocart:lastProductAdded'] && changes['vectocart:lastProductRoomId']) {
+          const lastRoomId = changes['vectocart:lastProductRoomId'].newValue;
+          // Only refresh if the product was added to this room
+        if (lastRoomId === room.id) {
+          logger.debug('RoomDetail:storageChange:productAdded', { roomId: room.id });
+          // Refresh immediately - background script only sets storage after DB write completes
+          loadProducts(false);
+        }
+        }
+      } catch (err) {
+        logger.error('RoomDetail:storageChange:error', err);
+      }
+    };
+
+    // Set up storage listener
     browser.storage.onChanged.addListener(handleStorageChange);
+    logger.debug('RoomDetail:storageListener:added', { roomId: room.id });
+    
+    // Also check storage periodically when visible (as fallback)
+    // This is cheap - only reads from browser storage, not database
+    const checkInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        checkStorageForUpdates();
+      }
+    }, 3000); // Check every 3 seconds when visible (cheap - only reads local storage)
+    
     return () => {
       browser.storage.onChanged.removeListener(handleStorageChange);
+      clearInterval(checkInterval);
+      logger.debug('RoomDetail:storageListener:removed', { roomId: room.id });
     };
   }, [room.id, loadProducts]);
+
+  // Refresh when sidepanel becomes visible (user switches back to it)
+  useEffect(() => {
+    // Use Page Visibility API to detect when sidepanel is visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Refresh when becoming visible (user switched back to sidepanel)
+        // Also check storage as a fallback
+        setTimeout(async () => {
+          try {
+            const storage = await browser.storage.local.get([
+              'vectocart:lastProductAdded',
+              'vectocart:lastProductRoomId'
+            ]);
+            const roomId = storage['vectocart:lastProductRoomId'] as string | undefined;
+            // If a product was recently added to this room, refresh
+            if (roomId === room.id) {
+              loadProducts(false);
+            }
+          } catch (err) {
+            // If storage check fails, just refresh anyway
+            loadProducts(false);
+          }
+        }, 200);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadProducts, room.id]);
 
   async function handleShare() {
     setSharing(true);
@@ -129,20 +236,22 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
     }
   }
 
-  async function handleDeleteProduct(productId: string) {
-    if (!confirm('Are you sure you want to remove this product from the room?')) {
-      return;
-    }
+  function handleDeleteClick(productId: string) {
+    setProductToDelete(productId);
+    setShowDeleteDialog(true);
+  }
 
-    setDeletingProductId(productId);
+  async function handleDeleteConfirm() {
+    if (!productToDelete) return;
+
+    setDeletingProductId(productToDelete);
     try {
-      logger.debug('RoomDetail:deleteProduct:request', { productId });
+      logger.debug('RoomDetail:deleteProduct:request', { productId: productToDelete });
       
       const response = await withFallback(
-        () => sendMessage({ type: 'products:delete', payload: { productId } }),
+        () => sendMessage({ type: 'products:delete', payload: { productId: productToDelete } }),
         async () => {
-          const { deleteProduct } = await import('@/services/supabase/products');
-          return await deleteProduct(productId);
+          return await deleteProduct(productToDelete);
         },
       );
 
@@ -151,15 +260,17 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
       }
 
       // Remove product from local state
-      setProducts((prev) => prev.filter(p => p.id !== productId));
+      setProducts((prev) => prev.filter(p => p.id !== productToDelete));
       toast.showSuccess('Product removed from room');
-      logger.debug('RoomDetail:deleteProduct:success', { productId });
+      logger.debug('RoomDetail:deleteProduct:success', { productId: productToDelete });
+      setProductToDelete(null);
     } catch (err) {
       const errorMessage = formatSupabaseError(err);
       logger.error('RoomDetail:deleteProduct:error', err);
       toast.showError(errorMessage);
     } finally {
       setDeletingProductId(null);
+      setShowDeleteDialog(false);
     }
   }
 
@@ -195,6 +306,10 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
           return (a.price ?? 0) - (b.price ?? 0);
         case 'price-desc':
           return (b.price ?? 0) - (a.price ?? 0);
+        case 'votes-desc':
+          return (b.netScore ?? 0) - (a.netScore ?? 0);
+        case 'votes-asc':
+          return (a.netScore ?? 0) - (b.netScore ?? 0);
         default:
           return 0;
       }
@@ -319,6 +434,10 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
                   <option value="price-desc">Highest Price</option>
                   <option value="price-asc">Lowest Price</option>
                 </optgroup>
+                <optgroup label="Votes">
+                  <option value="votes-desc">Most Voted</option>
+                  <option value="votes-asc">Least Voted</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -332,9 +451,16 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
         </div>
       )}
 
+      {/* Totals Card */}
+      {!loading && products.length > 0 && (
+        <div className="mb-4">
+          <TotalsCard products={products} />
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-6 w-6 text-[#E40046] animate-spin" />
+          <Loading text="Loading products..." subtitle="Fetching room items" fullScreen={false} size="default" />
         </div>
       ) : products.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -383,20 +509,22 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
                       <h3 className="text-sm font-semibold text-[#111827] line-clamp-2 flex-1">
                         {product.name}
                       </h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteProduct(product.id)}
-                        disabled={deletingProductId === product.id}
-                        className="h-6 w-6 p-0 hover:bg-red-50 text-red-600 hover:text-red-700 flex-shrink-0 ml-2"
-                        aria-label="Delete product"
-                      >
-                        {deletingProductId === product.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                      {canDeleteProduct(product) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(product.id)}
+                          disabled={deletingProductId === product.id}
+                          className="h-6 w-6 p-0 hover:bg-red-50 text-red-600 hover:text-red-700 flex-shrink-0 ml-2"
+                          aria-label="Delete product"
+                        >
+                          {deletingProductId === product.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-3 mb-2">
@@ -421,7 +549,7 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
                       </span>
                     </div>
                     
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <p className="text-xs text-[#6B7280]">
                         Added {new Date(product.addedAt).toLocaleDateString()}
                       </p>
@@ -436,6 +564,18 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
                         View Product
                       </Button>
                     </div>
+                    
+                    {/* Voting Component */}
+                    <ProductVoting 
+                      product={product} 
+                      onVoteChange={async (productId, voteType) => {
+                        // Refresh products to get updated vote counts
+                        // Small delay to ensure DB write completes
+                        setTimeout(async () => {
+                          await loadProducts(false);
+                        }, 300);
+                      }}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -443,6 +583,17 @@ export function RoomDetail({ room, onBack, onMembersClick }: RoomDetailProps) {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Remove Product"
+        description="Are you sure you want to remove this product from the room? This action cannot be undone."
+        confirmText="Remove"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

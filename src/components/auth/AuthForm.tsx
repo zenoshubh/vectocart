@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { signInWithGoogleViaIdentityFlow } from '@/services/supabase/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
+import { Loading } from '@/components/layout/Loading';
 import { FcGoogle } from 'react-icons/fc';
 import { Loader2, ShoppingCart } from 'lucide-react';
 
@@ -27,11 +28,8 @@ export function AuthForm() {
 
   if (authLoading) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-[#F8F9FA] to-white">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-[#E40046] animate-spin" />
-          <p className="text-sm text-[#6B7280]">Loading...</p>
-        </div>
+      <div className="min-h-dvh bg-gradient-to-br from-[#F8F9FA] to-white">
+        <Loading text="Checking authentication..." subtitle="Verifying your session" />
       </div>
     );
   }

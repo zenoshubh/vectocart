@@ -77,10 +77,47 @@ export default defineBackground(() => {
           case 'products:add': {
             const { addProduct } = await import('@/services/supabase/products');
             const { AddProductSchema } = await import('@/schemas/products');
+            const { DuplicateProductError } = await import('@/lib/errors');
             try {
               const validated = AddProductSchema.parse(msg.payload);
               const res = await addProduct(validated.roomId, validated);
-              respond({ ok: !res.error, data: res.data, error: res.error });
+              
+              // If product was added successfully, notify sidepanel immediately
+              if (!res.error && res.data) {
+                try {
+                  const timestamp = Date.now();
+                  await browser.storage.local.set({
+                    'vectocart:lastProductAdded': timestamp,
+                    'vectocart:lastProductRoomId': validated.roomId,
+                  });
+                  logger.debug('background:productAdded:storageSet', { 
+                    roomId: validated.roomId, 
+                    timestamp 
+                  });
+                } catch (storageErr) {
+                  logger.error('background:productAdded:storageError', storageErr);
+                  // Don't fail the request if storage update fails
+                }
+              }
+              
+              // Preserve error information when serializing (errors lose class properties when sent through messages)
+              let serializedError: Error | null = null;
+              if (res.error) {
+                if (res.error instanceof DuplicateProductError) {
+                  // Create a new Error with the message and add code property
+                  serializedError = new Error(res.error.message);
+                  (serializedError as any).code = 'DUPLICATE_PRODUCT';
+                  (serializedError as any).name = 'DuplicateProductError';
+                } else {
+                  serializedError = res.error instanceof Error ? res.error : new Error(String(res.error));
+                }
+                logger.debug('background:productAdd:error', { 
+                  errorMessage: serializedError.message,
+                  errorCode: (serializedError as any).code 
+                });
+              }
+              
+              respond({ ok: !res.error, data: res.data, error: serializedError });
             } catch (err) {
               const error = err instanceof Error ? err : new Error(String(err));
               respond({ ok: false, data: null, error });
@@ -106,6 +143,32 @@ export default defineBackground(() => {
             try {
               const validated = DeleteProductSchema.parse(msg.payload);
               const res = await deleteProduct(validated.productId);
+              respond({ ok: !res.error, data: res.data, error: res.error });
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              respond({ ok: false, data: null, error });
+            }
+            return;
+          }
+          case 'votes:vote': {
+            const { voteProduct } = await import('@/services/supabase/votes');
+            const { VoteProductSchema } = await import('@/schemas/votes');
+            try {
+              const validated = VoteProductSchema.parse(msg.payload);
+              const res = await voteProduct(validated);
+              respond({ ok: !res.error, data: res.data, error: res.error });
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              respond({ ok: false, data: null, error });
+            }
+            return;
+          }
+          case 'votes:remove': {
+            const { removeVote } = await import('@/services/supabase/votes');
+            const { RemoveVoteSchema } = await import('@/schemas/votes');
+            try {
+              const validated = RemoveVoteSchema.parse(msg.payload);
+              const res = await removeVote(validated);
               respond({ ok: !res.error, data: res.data, error: res.error });
             } catch (err) {
               const error = err instanceof Error ? err : new Error(String(err));

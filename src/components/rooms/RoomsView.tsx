@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Loading } from '@/components/layout/Loading';
 import { CreateRoomSchema, JoinRoomSchema } from '@/schemas/rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { useRooms } from '@/hooks/useRooms';
@@ -34,9 +35,16 @@ export function RoomsView({
   loading: externalLoading,
   refreshTrigger,
 }: RoomsViewProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { rooms, loading: roomsLoading, loadRooms, createRoom, joinRoom, deleteRoom } = useRooms();
   const toast = useToast();
+
+  // Helper function to check if user can delete a room
+  const canDeleteRoom = (room: Room): boolean => {
+    if (!user) return false;
+    // Only room owners can delete rooms
+    return room.createdBy === user.id;
+  };
 
   const [roomName, setRoomName] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -287,7 +295,7 @@ export function RoomsView({
 
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 text-[#E40046] animate-spin" />
+                <Loading text="Loading rooms..." subtitle="Fetching your shopping rooms" fullScreen={false} size="default" />
               </div>
             ) : (
               <div className="space-y-3">
@@ -343,17 +351,19 @@ export function RoomsView({
                               <Share2 className="h-4 w-4" />
                             )}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteClick(room.id);
-                            }}
-                            disabled={loading}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canDeleteRoom(room) && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(room.id);
+                              }}
+                              disabled={loading}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                           <ArrowRight className="h-5 w-5 text-[#6B7280] group-hover:text-[#E40046] transition-colors" />
                         </div>
                       </div>

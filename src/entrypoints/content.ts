@@ -1,220 +1,19 @@
 import './content/button.css';
 import { logger } from '@/lib/logger';
 import { detectPlatform, parseProduct } from '@/lib/parsers';
-import { sendMessage } from '@/lib/messaging';
-import type { Room } from '@/types/rooms';
 import type { ProductPlatform } from '@/types/products';
-import { browser } from 'wxt/browser';
+import { isProductPage } from '@/lib/content-script/platform';
+import { createButton, setButtonText } from '@/lib/content-script/button';
+import { createDropdown } from '@/lib/content-script/dropdown';
+import { showToast } from '@/lib/content-script/toast';
+import { checkAuth, fetchRooms, openSidepanel, addProductToRoom } from '@/lib/content-script/api';
 
 // Type for content script context - use any to avoid type conflicts with WXT's internal types
 type ContentScriptContext = any;
 
-// Check if we're on a product page
-function isProductPage(hostname: string): boolean {
-  const pathname = window.location.pathname;
-  
-  if (hostname.includes('amazon.')) {
-    // Amazon product pages typically have /dp/ or /gp/product/ in URL
-    // Also check for /product/ pattern
-    return pathname.includes('/dp/') || 
-           pathname.includes('/gp/product/') || 
-           pathname.includes('/product/');
-  }
-  if (hostname.includes('flipkart.com')) {
-    // Flipkart product pages have /p/ in URL
-    return pathname.includes('/p/');
-  }
-  if (hostname.includes('meesho.com')) {
-    // Meesho product pages have /p/ in URL
-    return pathname.includes('/p/');
-  }
-  return false;
-}
-
-function createCartIcon(): HTMLElement {
-  const icon = document.createElement('span');
-  icon.className = 'vectocart-cart-icon';
-  icon.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="8" cy="21" r="1"></circle>
-      <circle cx="19" cy="21" r="1"></circle>
-      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
-    </svg>
-  `;
-  return icon;
-}
-
-function setButtonText(button: HTMLButtonElement, text: string) {
-  // Find existing icon
-  const icon = button.querySelector('.vectocart-cart-icon');
-  
-  // Remove all child nodes
-  while (button.firstChild) {
-    button.removeChild(button.firstChild);
-  }
-  
-  // Re-add icon (preserve existing or create new)
-  if (icon) {
-    button.appendChild(icon);
-  } else {
-    button.appendChild(createCartIcon());
-  }
-  
-  // Add text
-  button.appendChild(document.createTextNode(text));
-}
-
-function createButton() {
-  const button = document.createElement('button');
-  button.className = 'vectocart-button';
-  
-  // Add cart icon
-  const icon = createCartIcon();
-  button.appendChild(icon);
-  
-  // Add text
-  const text = document.createTextNode('Add to VectoCart');
-  button.appendChild(text);
-  
-  button.setAttribute('aria-label', 'Add product to VectoCart');
-  
-  return button;
-}
-
-function createDropdown(
-  rooms: Room[], 
-  onRoomClick: (room: Room) => void,
-  onRemove: (dropdown: HTMLElement) => void
-): HTMLElement {
-  const dropdown = document.createElement('div');
-  dropdown.className = 'vectocart-dropdown';
-  
-  if (rooms.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'vectocart-dropdown-empty';
-    empty.textContent = 'No rooms available';
-    dropdown.appendChild(empty);
-  } else {
-    rooms.forEach((room) => {
-      const item = document.createElement('div');
-      item.className = 'vectocart-dropdown-item';
-      item.textContent = room.name;
-      item.setAttribute('role', 'button');
-      item.setAttribute('tabindex', '0');
-      item.addEventListener('click', () => {
-        onRoomClick(room);
-        onRemove(dropdown);
-      });
-      item.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onRoomClick(room);
-          onRemove(dropdown);
-        }
-      });
-      dropdown.appendChild(item);
-    });
-  }
-  
-  return dropdown;
-}
-
-function showToast(message: string, type: 'success' | 'error', ctx: ContentScriptContext) {
-  const toast = document.createElement('div');
-  toast.className = type === 'success' ? 'vectocart-success' : 'vectocart-error';
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  
-  ctx.setTimeout(() => {
-    toast.remove();
-  }, type === 'success' ? 2000 : 4000);
-}
-
-async function checkAuth(ctx: ContentScriptContext): Promise<{ isAuthenticated: boolean; userId: string | null }> {
-  try {
-    const response = await sendMessage({ type: 'auth:check', payload: {} });
-    if (response.ok && response.data) {
-      return response.data as { isAuthenticated: boolean; userId: string | null };
-    }
-    return { isAuthenticated: false, userId: null };
-  } catch (err) {
-    logger.error('checkAuth:error', err);
-    return { isAuthenticated: false, userId: null };
-  }
-}
-
-async function fetchRooms(ctx: ContentScriptContext): Promise<Room[]> {
-  try {
-    const response = await sendMessage({ type: 'rooms:list', payload: {} });
-    if (response.ok && response.data) {
-      return response.data as Room[];
-    }
-    return [];
-  } catch (err) {
-    logger.error('fetchRooms:error', err);
-    return [];
-  }
-}
-
-async function openSidepanel(ctx: ContentScriptContext) {
-  try {
-    // Content scripts can't access tabs API, must use background script
-    const response = await sendMessage({ type: 'sidepanel:open', payload: {} });
-    logger.debug('openSidepanel:response', { ok: response.ok, error: response.error });
-    
-    if (!response.ok || response.error) {
-      logger.error('openSidepanel:failed', response.error);
-      showToast('Failed to open sidepanel. Please click the extension icon.', 'error', ctx);
-    } else {
-      logger.debug('openSidepanel:success');
-    }
-  } catch (err) {
-    logger.error('openSidepanel:error', err);
-    showToast('Failed to open sidepanel. Please click the extension icon.', 'error', ctx);
-  }
-}
-
-async function addProductToRoom(
-  roomId: string,
-  platform: ProductPlatform,
-  productData: ReturnType<typeof parseProduct>,
-  ctx: ContentScriptContext,
-): Promise<boolean> {
-  try {
-    const response = await sendMessage({
-      type: 'products:add',
-      payload: {
-        roomId,
-        name: productData.name ?? 'Unknown Product',
-        price: productData.price,
-        currency: productData.currency,
-        rating: productData.rating,
-        image: productData.image,
-        url: window.location.href,
-        platform,
-      },
-    });
-    
-    if (response.ok && !response.error) {
-      // Notify sidepanel that a product was added by updating storage
-      try {
-        await browser.storage.local.set({
-          'vectocart:lastProductAdded': Date.now(),
-          'vectocart:lastProductRoomId': roomId,
-        });
-      } catch (err) {
-        // Ignore storage errors
-        logger.debug('Failed to update storage for product notification', { error: err instanceof Error ? err.message : String(err) });
-      }
-      return true;
-    }
-    throw response.error || new Error('Failed to add product');
-  } catch (err) {
-    logger.error('addProductToRoom:error', err);
-    return false;
-  }
-}
-
+/**
+ * Mounts the VectoCart button in the shadow root
+ */
 function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shadowRoot: ShadowRoot) {
   if (!ctx.isValid) return;
   
@@ -249,7 +48,7 @@ function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shado
       button.disabled = false;
       setButtonText(button, 'Add to VectoCart');
       
-      await openSidepanel(ctx);
+      await openSidepanel(ctx, (message, type) => showToast(message, type, ctx));
       showToast('Please sign in to add products', 'error', ctx);
       return;
     }
@@ -262,7 +61,7 @@ function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shado
     setButtonText(button, 'Add to VectoCart');
     
     if (rooms.length === 0) {
-      await openSidepanel(ctx);
+      await openSidepanel(ctx, (message, type) => showToast(message, type, ctx));
       showToast('Please create or join a room first', 'error', ctx);
       return;
     }
@@ -298,7 +97,13 @@ function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shado
       }
       
       // Add product to room
-      const success = await addProductToRoom(room.id, platform, productData, ctx);
+      const success = await addProductToRoom(
+        room.id, 
+        platform, 
+        productData, 
+        ctx,
+        (message, type) => showToast(message, type, ctx)
+      );
       
       isLoading = false;
       button.disabled = false;
@@ -306,8 +111,6 @@ function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shado
       
       if (success) {
         showToast(`Added to "${room.name}"`, 'success', ctx);
-      } else {
-        showToast('Failed to add product', 'error', ctx);
       }
     }, removeDropdownWithAnimation);
     
@@ -343,7 +146,6 @@ function mountButton(ctx: ContentScriptContext, platform: ProductPlatform, shado
 
 export default defineContentScript({
   matches: [
-    '*://*.amazon.com/*',
     '*://*.amazon.in/*',
     '*://*.flipkart.com/*',
     '*://*.meesho.com/*',

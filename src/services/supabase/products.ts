@@ -2,6 +2,7 @@ import { getSupabase } from './client';
 import type { Product, AddProductInput, ProductPlatform } from '@/types/products';
 import type { ServiceResult } from '@/types/rooms';
 import { logger } from '@/lib/logger';
+import { DuplicateProductError } from '@/lib/errors';
 
 async function getCurrentUserId(): Promise<string> {
   const supabase = getSupabase();
@@ -44,6 +45,78 @@ async function checkRoomMembership(roomId: string, userId: string): Promise<bool
   return !!data;
 }
 
+/**
+ * Normalize URL for duplicate detection
+ * Removes query parameters, fragments, and trailing slashes
+ * to catch variations of the same product URL
+ */
+function normalizeUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    // Remove query parameters and fragments
+    urlObj.search = '';
+    urlObj.hash = '';
+    // Remove trailing slash
+    let normalized = urlObj.toString();
+    if (normalized.endsWith('/')) {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized.toLowerCase();
+  } catch {
+    // If URL parsing fails, return original URL lowercased
+    return url.toLowerCase();
+  }
+}
+
+/**
+ * Check if a product with the same URL already exists in the room
+ */
+async function checkDuplicateProduct(roomId: string, productUrl: string): Promise<boolean> {
+  const supabase = getSupabase();
+  const normalizedUrl = normalizeUrl(productUrl);
+  
+  logger.debug('checkDuplicateProduct:request', { roomId, productUrl, normalizedUrl });
+  
+  // Get all products in the room
+  const { data: existingProducts, error } = await supabase
+    .from('products')
+    .select('url')
+    .eq('room_id', roomId);
+  
+  if (error) {
+    logger.error('checkDuplicateProduct:error', error);
+    // If we can't check, don't block the add (fail open)
+    return false;
+  }
+  
+  logger.debug('checkDuplicateProduct:existingProducts', { 
+    count: existingProducts?.length || 0,
+    products: existingProducts?.map(p => ({ url: p.url, normalized: normalizeUrl(p.url) }))
+  });
+  
+  // Check if any existing product has the same normalized URL
+  const isDuplicate = existingProducts?.some((product) => {
+    const existingNormalized = normalizeUrl(product.url);
+    const matches = existingNormalized === normalizedUrl;
+    if (matches) {
+      logger.debug('checkDuplicateProduct:matchFound', { 
+        existingUrl: product.url,
+        existingNormalized,
+        newUrl: productUrl,
+        newNormalized: normalizedUrl
+      });
+    }
+    return matches;
+  }) ?? false;
+  
+  logger.debug('checkDuplicateProduct:response', { 
+    isDuplicate, 
+    normalizedUrl,
+    existingCount: existingProducts?.length || 0
+  });
+  return isDuplicate;
+}
+
 export async function addProduct(
   roomId: string,
   productData: AddProductInput,
@@ -57,6 +130,16 @@ export async function addProduct(
     const isMember = await checkRoomMembership(roomId, userId);
     if (!isMember) {
       throw new Error('Not a member of this room');
+    }
+
+    // Check for duplicate product
+    const isDuplicate = await checkDuplicateProduct(roomId, productData.url);
+    if (isDuplicate) {
+      logger.debug('addProduct:duplicate', { roomId, productUrl: productData.url });
+      return {
+        data: null,
+        error: new DuplicateProductError('This product is already in the room'),
+      };
     }
 
     logger.debug('insertProduct:request', { roomId, userId, productData });
@@ -136,6 +219,71 @@ export async function listProductsByRoom(roomId: string): Promise<ServiceResult<
         platform: p.platform as Product['platform'],
       }),
     );
+
+    // Load vote counts and user votes for all products
+    const productIds = products.map((p) => p.id);
+    if (productIds.length > 0) {
+      try {
+        const { getVoteCounts, getUserVotes } = await import('./votes');
+        
+        const [voteCountsResult, userVotesResult] = await Promise.all([
+          getVoteCounts(productIds),
+          getUserVotes(productIds),
+        ]);
+
+        // Merge vote data into products
+        // Default all products to 0 votes if vote counts fail
+        for (const product of products) {
+          if (voteCountsResult.data) {
+            const counts = voteCountsResult.data.get(product.id);
+            if (counts) {
+              product.upvoteCount = counts.upvoteCount;
+              product.downvoteCount = counts.downvoteCount;
+              product.netScore = counts.netScore;
+            } else {
+              product.upvoteCount = 0;
+              product.downvoteCount = 0;
+              product.netScore = 0;
+            }
+          } else {
+            // If vote counts failed, default to 0
+            product.upvoteCount = 0;
+            product.downvoteCount = 0;
+            product.netScore = 0;
+            if (voteCountsResult.error) {
+              logger.warn('Failed to load vote counts, defaulting to 0', { 
+                error: voteCountsResult.error.message 
+              });
+            }
+          }
+          
+          if (userVotesResult.data) {
+            const userVote = userVotesResult.data.get(product.id);
+            product.userVote = userVote?.voteType ?? null;
+          } else {
+            product.userVote = null;
+            if (userVotesResult.error) {
+              logger.warn('Failed to load user votes, defaulting to null', { 
+                error: userVotesResult.error.message 
+              });
+            }
+          }
+        }
+      } catch (voteErr) {
+        // If vote loading completely fails, default all products to 0 votes
+        logger.warn('Failed to load votes, defaulting all products to 0 votes', { 
+          error: voteErr instanceof Error ? voteErr.message : String(voteErr) 
+        });
+        for (const product of products) {
+          product.upvoteCount = 0;
+          product.downvoteCount = 0;
+          product.netScore = 0;
+          product.userVote = null;
+        }
+      }
+    } else {
+      // No products, nothing to do
+    }
 
     logger.debug('listProductsByRoom:success', { count: products.length });
     return { data: products, error: null };

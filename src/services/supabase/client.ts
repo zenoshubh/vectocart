@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createBrowserStorageAdapter } from './storage';
+import { logger } from '@/lib/logger';
 
 let client: SupabaseClient | null = null;
 
@@ -37,14 +38,9 @@ export function getSupabase(): SupabaseClient {
       )}`,
     );
   }
-  // Lazy import logger to avoid circular dependencies
-  import('@/lib/logger').then(({ logger }) => {
-    logger.debug('createClient', {
-      urlPreview: url.slice(0, 24) + '...',
-      anonKeyPresent: !!anonKey,
-    });
-  }).catch(() => {
-    // Silently fail if logger not available
+  logger.debug('createClient', {
+    urlPreview: url.slice(0, 24) + '...',
+    anonKeyPresent: !!anonKey,
   });
   // Use custom storage adapter for browser extension compatibility
   const storageAdapter = createBrowserStorageAdapter();
@@ -73,12 +69,10 @@ export function getSupabase(): SupabaseClient {
   });
   
   // Log storage adapter setup
-  import('@/lib/logger').then(({ logger }) => {
-    logger.debug('Supabase client created', { 
-      storageKey,
-      hasStorageAdapter: !!storageAdapter 
-    });
-  }).catch(() => {});
+  logger.debug('Supabase client created', { 
+    storageKey,
+    hasStorageAdapter: !!storageAdapter 
+  });
   
   return client;
 }
@@ -119,10 +113,7 @@ export function debugSupabaseEnv(): {
       hasWXT_KEY: !!wxtKey,
     },
   };
-  // Lazy import logger
-  import('@/lib/logger').then(({ logger }) => {
-    logger.info('debugEnv', out);
-  }).catch(() => {});
+  logger.info('debugEnv', out);
   return out;
 }
 

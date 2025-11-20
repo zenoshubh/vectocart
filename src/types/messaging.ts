@@ -12,6 +12,8 @@ export type MessageType =
   | 'products:add'
   | 'products:list'
   | 'products:delete'
+  | 'votes:vote'
+  | 'votes:remove'
   | 'auth:check'
   | 'sidepanel:open';
 
@@ -87,6 +89,21 @@ export interface DeleteProductMessage extends BaseMessage {
   };
 }
 
+export interface VoteProductMessage extends BaseMessage {
+  type: 'votes:vote';
+  payload: {
+    productId: string;
+    voteType: 'upvote' | 'downvote';
+  };
+}
+
+export interface RemoveVoteMessage extends BaseMessage {
+  type: 'votes:remove';
+  payload: {
+    productId: string;
+  };
+}
+
 export interface AuthCheckMessage extends BaseMessage {
   type: 'auth:check';
   payload?: Record<string, never>;
@@ -107,6 +124,8 @@ export type Message =
   | AddProductMessage
   | ListProductsMessage
   | DeleteProductMessage
+  | VoteProductMessage
+  | RemoveVoteMessage
   | AuthCheckMessage
   | OpenSidepanelMessage;
 

@@ -1,3 +1,5 @@
+import type { VoteType } from './votes';
+
 export type ProductPlatform = 'amazon' | 'flipkart' | 'meesho';
 
 export interface Product {
@@ -12,6 +14,11 @@ export interface Product {
   addedBy: string;
   addedAt: string;
   platform: ProductPlatform;
+  // Vote-related fields (optional, may not always be loaded)
+  upvoteCount?: number;
+  downvoteCount?: number;
+  netScore?: number;
+  userVote?: VoteType | null;
 }
 
 export interface AddProductInput {

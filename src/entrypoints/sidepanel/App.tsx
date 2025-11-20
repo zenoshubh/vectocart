@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Header } from '@/components/Header';
-import { AuthForm } from '@/components/AuthForm';
-import { UsernameSetup } from '@/components/UsernameSetup';
-import { RoomsView } from '@/components/RoomsView';
-import { RoomDetail } from '@/components/RoomDetail';
-import { RoomMembers } from '@/components/RoomMembers';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Header } from '@/components/layout/Header';
+import { AuthForm } from '@/components/auth/AuthForm';
+import { UsernameSetup } from '@/components/auth/UsernameSetup';
+import { RoomsView } from '@/components/rooms/RoomsView';
+import { RoomDetail } from '@/components/rooms/RoomDetail';
+import { RoomMembers } from '@/components/rooms/RoomMembers';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { Loading } from '@/components/layout/Loading';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { UserProfileProvider, useUserProfileContext } from '@/contexts/UserProfileContext';
@@ -50,18 +51,26 @@ function AppContent() {
   const showBack = currentView !== 'rooms';
   const showRefresh = currentView === 'rooms';
 
-  // Show loading state while checking auth (but not during username setup)
-  if (authLoading || (profileLoading && isAuthenticated && hasUsername)) {
+  // Show loading state until authentication and profile states are confirmed
+  // This prevents flashing of auth/username screens when user is already authenticated
+  const isLoading = authLoading || (isAuthenticated && profileLoading);
+
+  if (isLoading) {
+    // Determine loading text based on what we're checking
+    let loadingText = 'Loading...';
+    let loadingSubtitle: string | undefined;
+
+    if (authLoading) {
+      loadingText = 'Checking authentication...';
+      loadingSubtitle = 'Verifying your session';
+    } else if (isAuthenticated && profileLoading) {
+      loadingText = 'Loading your profile...';
+      loadingSubtitle = 'Getting your account ready';
+    }
+
     return (
       <ErrorBoundary>
-        <div className="min-h-dvh bg-white flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="h-8 w-8 rounded-lg bg-[#E40046] flex items-center justify-center animate-pulse">
-              <span className="text-white text-sm font-bold">V</span>
-            </div>
-            <p className="text-sm text-[#6B7280]">Loading...</p>
-          </div>
-        </div>
+        <Loading text={loadingText} subtitle={loadingSubtitle} />
       </ErrorBoundary>
     );
   }

@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useUserProfileContext } from '@/contexts/UserProfileContext';
 import { useToast } from '@/hooks/useToast';
 import { UsernameSchema } from '@/schemas/user';
+import { checkUsernameAvailability } from '@/services/supabase/user';
 import { Loader2, User, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 
@@ -35,8 +36,6 @@ export function UsernameSetup() {
 
         setValidationError(null);
         setIsChecking(true);
-        // Call the service directly
-        const { checkUsernameAvailability } = await import('@/services/supabase/user');
         const result = await checkUsernameAvailability(username.toLowerCase());
         setIsAvailable(result.data === true);
         setIsChecking(false);

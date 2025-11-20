@@ -94,33 +94,37 @@ export function parseAmazon(): ParsedProduct {
     const priceMatch = priceText.match(/[\d,]+\.?\d*/);
     if (priceMatch) {
       price = parseFloat(priceMatch[0].replace(/,/g, ''));
-      // Detect currency from price text - check if text contains ₹ (INR), $ (USD), or € (EUR)
+      // Detect currency from price text - check if text contains ₹ (INR)
+      // Since we only support amazon.in, default to INR
       if (priceText.includes('₹')) {
         currency = 'INR';
-      } else if (priceText.includes('$')) {
-        currency = 'USD';
-      } else if (priceText.includes('€')) {
-        currency = 'EUR';
       } else {
-        // If no currency symbol found but we have a price, default based on hostname
-        // This is important because .a-offscreen might only contain the number
-        currency = window.location.hostname.includes('amazon.in') ? 'INR' : 'USD';
+        // Default to INR for amazon.in
+        currency = 'INR';
       }
     }
   }
   
-  // Also check parent container or nearby elements for currency symbol
+  // Currency - check for .a-price-symbol element (most reliable)
   if (price && !currency && priceEl) {
+    const currencyEl = document.querySelector('.a-price-symbol');
+    if (currencyEl) {
+      const currencyText = currencyEl.textContent?.trim() || '';
+      if (currencyText.includes('₹')) {
+        currency = 'INR';
+      }
+    }
+    // Also check parent container or nearby elements for currency symbol
+    if (!currency) {
     const priceContainer = priceEl.closest('.a-price');
     if (priceContainer) {
       const containerText = priceContainer.textContent || '';
       if (containerText.includes('₹')) currency = 'INR';
-      else if (containerText.includes('$')) currency = 'USD';
-      else if (containerText.includes('€')) currency = 'EUR';
+      }
     }
-    // Final fallback: use hostname
+    // Final fallback: default to INR for amazon.in
     if (!currency) {
-      currency = window.location.hostname.includes('amazon.in') ? 'INR' : 'USD';
+      currency = 'INR';
     }
   }
   
@@ -143,15 +147,27 @@ export function parseAmazon(): ParsedProduct {
     // Fallback if console is not available
   }
 
-  // Rating - from aria-label or title attribute
-  const ratingEl = document.querySelector('#acrPopover .a-icon-alt');
+  // Rating - from .a-size-small.a-color-base with aria-hidden="true"
   let rating: number | null = null;
+  const ratingEl = document.querySelector('.a-size-small.a-color-base[aria-hidden="true"]');
   
   if (ratingEl) {
-    const ratingText = ratingEl.getAttribute('aria-label') || ratingEl.textContent || '';
-    const ratingMatch = ratingText.match(/(\d+\.?\d*)\s*(?:out of|\/)\s*5/);
+    const ratingText = ratingEl.textContent?.trim() || '';
+    const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
     if (ratingMatch) {
       rating = parseFloat(ratingMatch[1]);
+    }
+  }
+  
+  // Fallback: try #acrPopover .a-icon-alt
+  if (!rating) {
+    const ratingElFallback = document.querySelector('#acrPopover .a-icon-alt');
+    if (ratingElFallback) {
+      const ratingText = ratingElFallback.getAttribute('aria-label') || ratingElFallback.textContent || '';
+      const ratingMatch = ratingText.match(/(\d+\.?\d*)\s*(?:out of|\/)\s*5/);
+      if (ratingMatch) {
+        rating = parseFloat(ratingMatch[1]);
+      }
     }
   }
 
